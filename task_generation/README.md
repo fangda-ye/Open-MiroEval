@@ -8,7 +8,7 @@ Generate high-quality deep-research evaluation queries through a 6-step pipeline
 |------|-------------|-----|
 | **0. Load seeds** | Read anonymized query examples by topic | `input/seed_patterns.json` |
 | **1. Fetch trends** | Real-time Google search per subtopic | Serper API, parallel |
-| **2. Generate** | LLM creates queries with trend + seed context | GPT-4o, 6 per topic x 12 topics |
+| **2. Generate** | LLM creates queries with trend + seed context | LLM, 6 per topic x 12 topics |
 | **3. Search validate** | Verify each query has real search results | Serper: >=3 results, >=2 unique domains |
 | **4. DR filter** | LLM judges if deep research is truly needed | Confidence >= 0.7 |
 | **5. Quality filter** | Generate baseline answer, keep only hard ones | quality in {low, medium} AND requires_search AND score <= 0.75 |
@@ -63,7 +63,7 @@ python pipeline.py --clean
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--model` | `openai/gpt-4o` | LLM model |
+| `--model` | `openai/gpt-5.2` | LLM model |
 | `--num-topics` | `12` | Topics from the pool |
 | `--num-per-topic` | `6` | Queries generated per topic |
 | `--max-workers` | `10` | Thread pool concurrency |
