@@ -24,15 +24,15 @@ All three evaluation modules share a unified `data/` directory as their input da
 ```
 MiroEval/
 ├── task_generation/           # Evaluation task generation pipeline
-├── data/                      # Shared data directory (input queries + model results)
-│   ├── input_queries/         # Evaluation query sets
-│   ├── method_results/        # Text-only model results (JSON array per model)
-│   ├── method_multimodal_results/  # Multimodal model results (JSON array per model)
+├── data/                      # Shared data directory
+│   ├── input_queries/         # Evaluation query sets + multimodal attachments
 │   └── detail_results/        # Per-task per-model intermediate scores
 ├── factual_eval/              # Factual evaluation (MiroFlow-based fact-checking agent)
 ├── point_quality/             # Quality evaluation (adaptive point-wise scoring)
 └── process_eval/              # Process evaluation (intrinsic process quality + report alignment)
 ```
+
+> **Note:** Model result files (one JSON array per model) should be placed in user-created directories such as `data/method_results/` (text-only) and `data/method_multimodal_results/` (multimodal). These directories are not included in the repository and must be created before running evaluations.
 
 ---
 
@@ -56,37 +56,58 @@ See [`task_generation/README.md`](task_generation/README.md) for full details.
 | `multimodal-attachments/`   | Attachment files referenced by multimodal queries, organized by query ID (e.g., `72/`, `93/`). Contains images, PDFs, and other documents.   | —     |
 
 
-**Query Schema:**
+**Query Schema (text-only):**
 
 ```json
 {
   "id": 1,
   "chat_id": "uuid",
   "rewritten_query": "Expanded/rewritten query",
-  "files": [],
   "annotation": {
-    "category": "text | image | doc | multi_doc",
+    "category": "text",
     "language": "zh | en",
-    "pattern": "T1-T6",
-    "domain": "tech | finance | medical | ..."
+    "origin_id": 2,
+    "pattern": "T1 | T2 | T5 | T6",
+    "domain": "tech | finance | medical | ...",
+    "topic": "...",
+    "persona": "...",
+    "...": "additional fields omitted"
   }
 }
 ```
 
-**Pattern Taxonomy (T1-T6):**
+**Query Schema (multimodal):**
+
+```json
+{
+  "id": 71,
+  "chat_id": "uuid",
+  "rewritten_query": "Expanded/rewritten query",
+  "files": [
+    { "filename": "attachment_71_01.jpg", "type": "image", "dir": "multimodal-attachments/71/attachment_71_01.jpg", "size": "1.5 MB" }
+  ],
+  "annotation": {
+    "category": "image | doc | multi_doc",
+    "language": "zh | en",
+    "origin_id": 102
+  }
+}
+```
+
+> **Note:** Text queries do not have a `files` field. Multimodal queries do not have `pattern` or `domain` fields.
+
+**Pattern Taxonomy:** (applies to text queries; ~50% of text queries carry a pattern label)
 
 - T1: Landscape Survey
 - T2: Comparative Evaluation
-- T3: Fact Verification
-- T4: Problem Diagnosis
 - T5: Decision Analysis
 - T6: Scheme Design
 
-**Domain Distribution:** tech, finance, medical, engineering, business, humanities, science, lifestyle
+**Domain Distribution:** tech, finance, medical, engineering, business, humanities, science, lifestyle, cybersecurity, education, energy, geopolitics, health, legal, policy, trade, other
 
 ### Model Results (`data/method_results/`, `data/method_multimodal_results/`)
 
-One JSON file per model, containing a JSON array of complete query-response pairs. Place your model's output file (e.g., `<model_name>_text.json`) in the appropriate directory.
+One JSON file per model, containing a JSON array of complete query-response pairs. Place your model's output file (e.g., `<model_name>_text.json`) in the appropriate directory (these directories must be created by the user).
 
 **Result Schema:**
 
@@ -95,14 +116,13 @@ One JSON file per model, containing a JSON array of complete query-response pair
   "id": 1,
   "chat_id": "uuid",
   "rewritten_query": "Rewritten query",
-  "files": [],
-  "annotation": { "category": "...", "language": "...", "pattern": "...", "domain": "..." },
+  "annotation": { "..." },
   "response": "Model-generated research report",
   "process": "String of research process"
 }
 ```
 
-The `response` field contains the model's final report output. The `process` field contains the model's intermediate research process trace (format varies by model).
+The `response` field contains the model's final report output. The `process` field contains the model's intermediate research process trace (format varies by model). Multimodal entries additionally contain a `files` field (see Query Schema above).
 
 ---
 
@@ -114,7 +134,7 @@ Active fact-checking powered by the [MiroFlow](https://github.com/MiroMindAI/Mir
 
 1. **Report Segmentation**: Splits the model-generated report into logical segments
 2. **Per-segment Fact-checking**: Deploys an agent for each segment to gather evidence via web search
-3. **Verdict**: Labels each factual statement as `Right` (correct) / `Wrong` (incorrect) / `Unknown` (unverifiable) / `Conflict` (contradictory evidence between web and attachment sources)
+3. **Verdict**: Labels each factual statement as `Right` (correct) / `Wrong` (incorrect) / `Unknown` (unverifiable). For multimodal evaluation, an additional `Conflict` label is used when web sources and attachment content provide contradictory evidence.
 
 ### Directory Structure
 
@@ -133,12 +153,15 @@ factual_eval/
 │   ├── llm/                   # Multi-provider LLM support
 │   ├── tool/                  # MCP server tool integration
 │   ├── io_processor/          # I/O processors (segmentation, summarization, etc.)
+│   ├── logging/               # Task tracing and logging decorators
+│   ├── skill/                 # Skill manager and definitions
 │   └── utils/                 # Utility functions
 ├── utils/
 │   ├── convert_to_factual_eval.py  # Convert method_results JSON array → per-item files
 │   └── check_progress_factual_eval.py
 ├── scripts/
-│   └── run_factual_eval.sh    # Main run script
+│   ├── run_factual_eval.sh    # Main run script
+│   └── run_single_factual_eval_task.py  # Single-task runner
 ├── .env.template              # Environment variables template
 └── pyproject.toml             # Dependencies (Python >= 3.11)
 ```
@@ -146,7 +169,7 @@ factual_eval/
 ### Data Loading
 
 Factual eval reads per-item JSON files from `data/factual-eval/<model-dir>/` inside `factual_eval/`.
-The base data directory is configured via the `DATA_DIR` environment variable (default: `./data` relative to `factual_eval/`).
+The base data directory is configured via the `DATA_DIR` environment variable. The shell script defaults to `./data` (relative to `factual_eval/`), while the Hydra config falls back to `../../miroflow/data`. It is recommended to set `DATA_DIR` explicitly in your `.env` file.
 
 **Step 1 — Convert raw results to per-item files** (one-time, skip if already done):
 
@@ -187,6 +210,9 @@ cd factual_eval
 # Evaluate a specific model (from pre-converted per-item files)
 bash scripts/run_factual_eval.sh --model-dir mirothinker-v17-text
 
+# Evaluate directly from a JSON array file (no pre-conversion needed)
+bash scripts/run_factual_eval.sh --source-file mirothinker_v17_text_100.json
+
 # Multimodal evaluation
 bash scripts/run_factual_eval.sh \
     --config config/benchmark_factual-eval_multimodal.yaml \
@@ -194,6 +220,10 @@ bash scripts/run_factual_eval.sh \
 
 # Limit number of tasks (for testing)
 bash scripts/run_factual_eval.sh --model-dir chatgpt-text-only --max-tasks 5
+
+# Control concurrency
+bash scripts/run_factual_eval.sh --model-dir mirothinker-v17-text \
+    --max-concurrent 5 --max-concurrent-chunks 5
 
 # Resume a previous run
 bash scripts/run_factual_eval.sh --result-dir logs/factual-eval/prev_run
@@ -273,13 +303,18 @@ cd point_quality
 python run_batch_eval.py --input ../data/method_results/mirothinker_v17_text_demo.json --model_name mirothinker_v17
 ```
 
-The input file is a JSON array of entries, each containing `rewritten_query`, `response`, and optional `files` for attachments. Attachment paths are resolved relative to `{data_dir}/input_queries/multimodal/`.
+The input file is a JSON array of entries, each containing `rewritten_query`, `response`, and optional `files` for attachments. Attachment file paths in the `dir` field (e.g., `multimodal-attachments/72/attachment_72_01.jpg`) are resolved relative to `{data_dir}/input_queries/multimodal/`.
 
 ### Setup
 
 ```bash
 cd point_quality
 
+pip install openai python-dotenv pyyaml
+
+# Configure API keys (copy template and fill in values)
+cp .env.template .env
+# Edit .env with your OPENAI_API_KEY (or OPENROUTER_API_KEY)
 ```
 
 ### Usage
@@ -322,14 +357,16 @@ evaluation:
 ```json
 {
   "summary": {
-    "mirothinker": {
-      "average_total_score": 8.807,
-      "dimension_averages": {
-        "coverage_score": 8.5,
-        "insight_score": 8.6,
-        "instruction_following_score": 9.48,
-        "clarity_score": 9.36,
-        "total_weighted_score": 8.807
+    "models": {
+      "mirothinker": {
+        "average_total_score": 8.807,
+        "total_queries": 70,
+        "dimension_averages": {
+          "coverage_score": 8.5,
+          "insight_score": 8.6,
+          "instruction_following_score": 9.48,
+          "clarity_score": 9.36
+        }
       }
     }
   },
@@ -441,6 +478,9 @@ python run_pipeline.py --phase phase2
 
 # Specify models and entry count
 python run_pipeline.py --models claude gemini --max-entries 10
+
+# Evaluate specific entry IDs with custom parallelism
+python run_pipeline.py --entry-ids 1 2 3 --max-workers 4
 
 # Clear cache and re-run
 python run_pipeline.py --clear-cache

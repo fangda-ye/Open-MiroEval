@@ -6,13 +6,14 @@ Generate high-quality deep-research evaluation queries through a 6-step pipeline
 
 | Step | What it does | How |
 |------|-------------|-----|
-| **0. Load seeds** | Read anonymized query examples by topic | `input/seed_patterns.json` |
 | **1. Fetch trends** | Real-time Google search per subtopic | Serper API, parallel |
 | **2. Generate** | LLM creates queries with trend + seed context | LLM, 6 per topic x 12 topics |
 | **3. Search validate** | Verify each query has real search results | Serper: >=3 results, >=2 unique domains |
 | **4. DR filter** | LLM judges if deep research is truly needed | Confidence >= 0.7 |
 | **5. Quality filter** | Generate baseline answer, keep only hard ones | quality in {low, medium} AND requires_search AND score <= 0.75 |
 | **6. Export** | Normalize domains, format output | 11 canonical domain labels |
+
+> Seeds are loaded from `input/seed_patterns.json` before Step 1.
 
 Each step caches its output as `intermediate_N_*.json` -- rerunning skips completed steps. Use `--clean` to reset.
 
@@ -37,7 +38,7 @@ python pipeline.py --clean
 {
   "id": 1,
   "chat_id": "uuid",
-  "query": "Full research query text...",
+  "query": "Full research query text...",        // renamed to "rewritten_query" in final benchmark data
   "files": [],
   "annotation": {
     "category": "text-auto",
@@ -69,6 +70,7 @@ python pipeline.py --clean
 | `--max-workers` | `10` | Thread pool concurrency |
 | `--dr-threshold` | `0.7` | Min DR confidence to pass |
 | `--quality-threshold` | `0.75` | Max baseline quality score (lower = harder) |
+| `--output` | `outputs/generated.json` | Output file path |
 | `--clean` | `false` | Clear caches and rerun |
 
 ## Design Decisions

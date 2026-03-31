@@ -86,15 +86,15 @@ Per-task per-model process evaluation scores. Dimension scores are **1-10 intege
 }
 ```
 
-When per-dimension data is unavailable but the overall score is known, a fallback format is used:
+Some entries include an additional `_overall_from_per_task` field alongside the normal dimension scores, representing the overall score derived from per-task aggregation:
 
 ```json
 {
   "<task_id>": {
     "<model_id>": {
-      "intrinsic": { "search_breadth": null, ... },
-      "alignment": { "findings_to_report": null, ... },
-      "_overall_from_per_task": 6.634
+      "intrinsic": { "search_breadth": 8, "analytical_depth": 7, ... },
+      "alignment": { "findings_to_report": 7, "report_to_process": 5, ... },
+      "_overall_from_per_task": 7.033
     }
   }
 }
