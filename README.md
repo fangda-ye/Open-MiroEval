@@ -13,8 +13,7 @@
 MiroEval is a comprehensive evaluation framework for Deep Research systems, providing automated **task generation** and assessment across three complementary dimensions: **Factual** correctness, **Point**-wise quality, and **Process** quality.
 
 <div align="center">
-  <img src="static/text_70_results.png" width="90%" alt="Text-only 70-query evaluation results across three dimensions" />
-  <p><i>Text-only evaluation results (70 queries) across Synthesis Quality, Factual Accuracy, and Process Quality.</i></p>
+  <img src="static/benchmark_results.png" width="100%" alt="Benchmark results across Text-Only and Multimodal evaluations" />
 </div>
 
 All three evaluation modules share a unified `data/` directory as their input data source. Each sub-project manages its own `.env` file for API keys (see `.env.template` in each sub-project).
