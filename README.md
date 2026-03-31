@@ -3,6 +3,7 @@
 
   <h3>MiroEval: Benchmarking Multimodal Deep Research Agents in Process and Outcome</h3>
 
+[![Paper](https://img.shields.io/badge/Paper-arXiv%202603.28407-B31B1B?style=for-the-badge&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2603.28407)
 [![Blog](https://img.shields.io/badge/Blog-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://miroeval.github.io/blog)
 [![WEBSITE](https://img.shields.io/badge/Website-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white)](https://miroeval.github.io/website)
 [![GITHUB](https://img.shields.io/badge/Github-24292F?style=for-the-badge&logo=github&logoColor=white)](https://github.com/MiroMindAI/MiroEval)
@@ -484,6 +485,20 @@ python run_pipeline.py --clear-cache
 | **Caching**       | None (agent state)              | Multi-level JSON cache      | Three-level JSON cache    |
 | **Python**        | >= 3.11 (uv)                    | >= 3.10 (pip)               | >= 3.10 (pip)             |
 
+
+## Citation
+
+```bibtex
+@misc{ye2026miroevalbenchmarkingmultimodaldeep,
+      title={MiroEval: Benchmarking Multimodal Deep Research Agents in Process and Outcome},
+      author={Fangda Ye and Yuxin Hu and Pengxiang Zhu and Yibo Li and Ziqi Jin and Yao Xiao and Yibo Wang and Lei Wang and Zhen Zhang and Lu Wang and Yue Deng and Bin Wang and Yifan Zhang and Liangcai Su and Xinyu Wang and He Zhao and Chen Wei and Qiang Ren and Bryan Hooi and An Bo and Shuicheng Yan and Lidong Bing},
+      year={2026},
+      eprint={2603.28407},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2603.28407},
+}
+```
 
 ## License
 
