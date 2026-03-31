@@ -57,9 +57,9 @@ Per-task per-model factuality verdict counts (integers):
 }
 ```
 
-**Key metric:** `Right Ratio = right / (right + wrong + unknown) × 100`
+**Key metric:** `Right Ratio = right / (right + wrong + unknown + conflict) × 100`
 
-Note: `conflict` counts are excluded from the ratio denominator. For text-only tasks, `conflict` is typically 0. For multimodal tasks, `conflict` reflects contradictions between web sources and document/image content.
+Note: For text-only tasks, `conflict` is typically 0. For multimodal tasks, `conflict` reflects contradictions between web sources and document/image content.
 
 ### process/{text,multimodal}.json
 

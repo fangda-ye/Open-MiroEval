@@ -248,7 +248,7 @@ Each query produces a JSON result containing a `core_state` list:
 }
 ```
 
-**Key Metric:** Correct Statement Ratio = Right / (Right + Wrong + Unknown)
+**Key Metric:** Correct Statement Ratio = Right / (Right + Wrong + Unknown + Conflict)
 
 ---
 
