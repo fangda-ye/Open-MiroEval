@@ -97,13 +97,13 @@ MiroEval/
 │   │   ├── config.py              # Centralized configuration
 │   │   ├── models.py              # TypedDict data models
 │   │   └── utils.py               # JSON extraction, data loading
-│   ├── factual/                   # Factual eval (wraps MiroFlow)
+│   ├── factual/                   # Factual eval (wraps MiroFlow + Hydra configs)
 │   ├── quality/                   # Report quality eval (5-stage pipeline)
 │   ├── process/                   # Process quality eval (8 dimensions)
 │   ├── runner.py                  # Incremental orchestrator with manifest tracking
 │   └── cli.py                     # CLI entry point
 │
-├── factual_eval/                  # MiroFlow agent framework (standalone SDK)
+├── third_party/miroflow/          # MiroFlow agent framework (vendored)
 ├── task_generation/               # Evaluation task generation pipeline
 ├── data/                          # Shared data directory
 │   ├── input_queries/             # Evaluation query sets + attachments

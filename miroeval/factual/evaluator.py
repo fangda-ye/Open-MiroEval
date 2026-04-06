@@ -24,8 +24,10 @@ from miroeval.core.config import REPO_ROOT
 
 logger = logging.getLogger(__name__)
 
-# Path to the factual_eval directory (where MiroFlow configs live).
-FACTUAL_EVAL_DIR = REPO_ROOT / "factual_eval"
+# Path to the factual module's config directory (Hydra configs, prompts).
+FACTUAL_CONFIG_DIR = Path(__file__).resolve().parent / "config"
+# MiroFlow framework lives in third_party/.
+MIROFLOW_DIR = REPO_ROOT / "third_party" / "miroflow"
 
 _TEXT_CONFIG = "benchmark_factual-eval_text"
 _MULTIMODAL_CONFIG = "benchmark_factual-eval_multimodal"
@@ -105,9 +107,12 @@ class FactualEvaluator:
         if self._hydra_ready:
             return
 
-        fe_dir = str(FACTUAL_EVAL_DIR)
-        if fe_dir not in sys.path:
-            sys.path.insert(0, fe_dir)
+        # Ensure MiroFlow and config packages are importable.
+        mf_dir = str(MIROFLOW_DIR)
+        cfg_parent = str(FACTUAL_CONFIG_DIR.parent)  # miroeval/factual/
+        for p in (mf_dir, cfg_parent):
+            if p not in sys.path:
+                sys.path.insert(0, p)
 
         from hydra.core.global_hydra import GlobalHydra
         from omegaconf import OmegaConf
@@ -117,8 +122,8 @@ class FactualEvaluator:
 
         prev_cwd = os.getcwd()
         try:
-            os.chdir(fe_dir)
-            from config import load_config  # factual_eval/config/__init__.py
+            os.chdir(cfg_parent)
+            from config import load_config
 
             self._cfg_text = load_config(_TEXT_CONFIG)
 
@@ -131,7 +136,7 @@ class FactualEvaluator:
             os.chdir(prev_cwd)
 
         self._hydra_ready = True
-        logger.info("factual_eval: Hydra initialised")
+        logger.info("factual: Hydra initialised")
 
     # ── Core execution ────────────────────────────────────────────────────
 
@@ -151,7 +156,7 @@ class FactualEvaluator:
         cfg_template = self._cfg_multimodal if mode == "multimodal" else self._cfg_text
 
         # Write temp data file.
-        tmp_dir = FACTUAL_EVAL_DIR / "data" / "_api_tmp"
+        tmp_dir = REPO_ROOT / "outputs" / "_factual_tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         tmp_filename = f"eval_{model_name}_{uuid.uuid4().hex[:8]}.json"
         tmp_path = tmp_dir / tmp_filename
@@ -161,7 +166,7 @@ class FactualEvaluator:
                 json.dump(entries, f, ensure_ascii=False)
 
             prev_cwd = os.getcwd()
-            os.chdir(str(FACTUAL_EVAL_DIR))
+            os.chdir(str(FACTUAL_CONFIG_DIR.parent))
             try:
                 return self._run(cfg_template, tmp_path, model_name)
             finally:
@@ -184,7 +189,7 @@ class FactualEvaluator:
         cfg = OmegaConf.create(cfg_dict)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = str(FACTUAL_EVAL_DIR / "logs" / "factual-eval" / f"run_{ts}")
+        output_dir = str(REPO_ROOT / "outputs" / "_factual_logs" / f"run_{ts}")
         cfg.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         set_tracer(output_dir)

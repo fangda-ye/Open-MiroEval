@@ -22,9 +22,8 @@ all = ["miroeval[factual]"]
 miroeval = "miroeval.cli:main"
 
 [tool.uv.sources]
-# During development, use the local miroflow package.
-# For production, remove this and install miroflow from PyPI/git.
-miroflow = { path = "factual_eval", editable = true }
+# MiroFlow is vendored in third_party/ (internal version with factual eval extensions).
+miroflow = { path = "third_party/miroflow", editable = true }
 
 [build-system]
 requires = ["hatchling"]

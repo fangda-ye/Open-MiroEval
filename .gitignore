@@ -145,7 +145,7 @@ __marimo__/
 
 logs/
 tmp/
-thirdparty/
+# thirdparty/ (old; third_party/miroflow/ is tracked)
 outputs/
 
 data/*
@@ -163,11 +163,7 @@ data/method_multimodal_results/*
 debug.py
 **/debug.py
 
-factual_eval/data/
-factual_eval/logs/
-process_eval/outputs/
-process_eval/experiments/outputs/
-point_quality/outputs/*
+miroeval/factual/data/
 
 tex/__pycache__/
 tex/tables_example/rew
