@@ -63,10 +63,10 @@ cp .env.template .env
 cd point_quality
 
 # Text-only evaluation
-python run_batch_eval.py --input ../data/method_results/mirothinker_v17_text_demo.json --model_name mirothinker_v17
+python run_batch_eval.py --input ../data/method_results/mirothinker_v17_text.json --model_name mirothinker_v17
 
 # Multimodal evaluation (attachments resolved automatically from data/input_queries/multimodal/)
-python run_batch_eval.py --input ../data/method_multimodal_results/mirothinker_v17_multimodal_demo.json --model_name mirothinker_v17
+python run_batch_eval.py --input ../data/method_multimodal_results/mirothinker_v17_multimodal.json --model_name mirothinker_v17
 
 # Specify evaluator model and query count
 python run_batch_eval.py --input ../data/method_results/claude_text.json --model_name claude \

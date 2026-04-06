@@ -170,7 +170,7 @@ def _load_json_array_tasks(json_file: Path) -> list[Task]:
         if not isinstance(data, list):
             return []
 
-        model_name = json_file.stem  # e.g., "mirothinker_v17_text_100"
+        model_name = json_file.stem  # e.g., "mirothinker_v17_text"
         tasks = []
         for entry in data:
             if not isinstance(entry, dict):

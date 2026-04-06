@@ -8,7 +8,7 @@
 #
 # Usage:
 #   bash scripts/run_factual_eval.sh --model-dir chatgpt-text-only-50
-#   bash scripts/run_factual_eval.sh --source-file mirothinker_v17_text_100.json
+#   bash scripts/run_factual_eval.sh --source-file mirothinker_v17_text.json
 #   bash scripts/run_factual_eval.sh --config config/benchmark_factual-eval_multimodal.yaml \
 #       --model-dir mirothinker-v17-multimodal
 #   bash scripts/run_factual_eval.sh --max-tasks 1          # test with 1 task

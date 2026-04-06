@@ -11,7 +11,7 @@ is one JSON file per item, same schema, one object per file.
 
 Usage:
     python utils/convert_to_factual_eval.py \\
-        --input ../data/method_results/mirothinker_v17_text_100.json \\
+        --input ../data/method_results/mirothinker_v17_text.json \\
         --output-dir ../../miroflow/data/factual-eval/mirothinker-v17-text-only-50 \\
         [--model-name mirothinker_v17] \\
         [--num-samples 50] \\
@@ -32,7 +32,7 @@ def main():
     parser.add_argument(
         "--input",
         required=True,
-        help="Path to the source JSON array file (e.g. data/method_results/mirothinker_v17_text_100.json)",
+        help="Path to the source JSON array file (e.g. data/method_results/mirothinker_v17_text.json)",
     )
     parser.add_argument(
         "--output-dir",

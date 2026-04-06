@@ -50,8 +50,8 @@ cd factual_eval
 
 # Convert a method_results JSON array → individual files in factual_eval/data/factual-eval/
 python utils/convert_to_factual_eval.py \
-    --input ../data/method_results/mirothinker_v17_text_demo.json \
-    --output-dir data/factual-eval/mirothinker-v17-text-demo
+    --input ../data/method_results/mirothinker_v17_text.json \
+    --output-dir data/factual-eval/mirothinker-v17-text
 ```
 
 The output format is one JSON file per item (same schema as the source), named `<model-name>_<id>.json`.
@@ -87,7 +87,7 @@ cd factual_eval
 bash scripts/run_factual_eval.sh --model-dir mirothinker-v17-text
 
 # Evaluate directly from a JSON array file (no pre-conversion needed)
-bash scripts/run_factual_eval.sh --source-file mirothinker_v17_text_100.json
+bash scripts/run_factual_eval.sh --source-file mirothinker_v17_text.json
 
 # Multimodal evaluation
 bash scripts/run_factual_eval.sh \

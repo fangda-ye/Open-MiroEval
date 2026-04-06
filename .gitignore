@@ -154,7 +154,7 @@ data/*
 !data/input_queries/
 !data/method_results/
 data/method_results/*
-!data/method_results/mirothinker_v17_text_100.json
+!data/method_results/mirothinker_v17_text.json
 !data/method_multimodal_results/
 data/method_multimodal_results/*
 !data/method_multimodal_results/mirothinker_v17_multimodal.json
