@@ -139,8 +139,10 @@ class TaskTracer:
 
     def __init__(self, log_path: str | Path = "./logs"):
         self.log_path = Path(log_path)
-        if not self.log_path.exists():
-            self.log_path.mkdir(parents=True, exist_ok=True)
+        # Directory is created lazily on first write or when set_log_path is
+        # called with the real output path.  Eagerly mkdir-ing the default
+        # "./logs" would pollute whatever CWD happens to be active at import
+        # time (e.g. the repo root instead of factual_eval/).
 
         self._active_tasks: Dict[str, TaskLogFile] = {}
 
@@ -190,6 +192,9 @@ class TaskTracer:
 
         file_path = self.log_path / f"{key}.json"
         temp_path = self.log_path / f"{key}.tmp"
+
+        # Ensure log directory exists (lazy creation).
+        self.log_path.mkdir(parents=True, exist_ok=True)
 
         # Write to temp file then rename for atomicity
         try:

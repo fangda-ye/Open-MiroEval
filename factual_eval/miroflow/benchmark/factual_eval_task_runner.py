@@ -129,9 +129,31 @@ async def run_factual_eval_task(
         try:
             async with semaphore:
                 # Compute attachment file paths (backward-compatible: None → [])
-                file_paths = task.file_path if isinstance(task.file_path, list) else (
+                raw_paths = task.file_path if isinstance(task.file_path, list) else (
                     [task.file_path] if task.file_path else []
                 )
+
+                # Resolve dict-format entries and validate file existence
+                file_paths = []
+                for fp in raw_paths:
+                    if isinstance(fp, dict):
+                        rel_path = fp.get("dir", "")
+                        if not rel_path:
+                            continue
+                        abs_path = os.path.abspath(
+                            os.path.join("data", "input_queries", rel_path)
+                        )
+                    elif isinstance(fp, str) and fp.strip():
+                        abs_path = os.path.abspath(fp)
+                    else:
+                        continue
+                    if os.path.isfile(abs_path):
+                        file_paths.append(abs_path)
+                    else:
+                        logger.warning(
+                            f"Task {task.task_id} chunk {idx}: "
+                            f"attachment not found, skipping: {abs_path}"
+                        )
 
                 for attempt in range(max_retries):
                     try:

@@ -9,6 +9,9 @@ from datetime import datetime
 import hydra
 import omegaconf
 
+# Root of the factual_eval package — used to resolve relative output paths.
+FACTUAL_EVAL_DIR = pathlib.Path(__file__).parent.parent.absolute()
+
 
 def load_config(config_path: str, *overrides) -> omegaconf.DictConfig:
     """Initialize Hydra and load configuration with timestamped output directory."""
@@ -38,12 +41,17 @@ def load_config(config_path: str, *overrides) -> omegaconf.DictConfig:
     # Create timestamped output directory only if output_dir was not explicitly specified
     if output_dir_override is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = pathlib.Path(cfg.output_dir) / f"{config_name}_{timestamp}"
+        base_dir = pathlib.Path(cfg.output_dir)
+        if not base_dir.is_absolute():
+            base_dir = FACTUAL_EVAL_DIR / base_dir
+        output_dir = base_dir / f"{config_name}_{timestamp}"
         output_dir.mkdir(parents=True, exist_ok=True)
         cfg.output_dir = str(output_dir)
     else:
         # Use the explicitly specified output_dir directly
         output_dir = pathlib.Path(cfg.output_dir)
+        if not output_dir.is_absolute():
+            output_dir = FACTUAL_EVAL_DIR / output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
         cfg.output_dir = str(output_dir)
 

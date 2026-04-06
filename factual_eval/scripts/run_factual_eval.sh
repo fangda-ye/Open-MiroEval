@@ -102,7 +102,14 @@ echo "=========================================="
 
 mkdir -p "$RESULTS_DIR"
 
-DATA_DIR="$DATA_DIR" uv run python miroflow/benchmark/run_factual_eval.py \
+# Use the root-level venv (created by `uv sync` at repo root).
+# Falls back to `uv run` from the factual_eval directory.
+VENV_PYTHON="$(cd .. && pwd)/.venv/bin/python"
+if [ ! -x "$VENV_PYTHON" ]; then
+    VENV_PYTHON="uv run python"
+fi
+
+DATA_DIR="$DATA_DIR" $VENV_PYTHON miroflow/benchmark/run_factual_eval.py \
     --config-path "$CONFIG" \
     benchmark.execution.max_concurrent=$MAX_CONCURRENT \
     benchmark.execution.max_concurrent_chunks=$MAX_CONCURRENT_CHUNKS \

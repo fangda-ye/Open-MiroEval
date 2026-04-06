@@ -146,6 +146,7 @@ __marimo__/
 logs/
 tmp/
 thirdparty/
+outputs/
 
 data/*
 !data/README.md
@@ -163,6 +164,7 @@ debug.py
 **/debug.py
 
 factual_eval/data/
+factual_eval/logs/
 process_eval/outputs/
 process_eval/experiments/outputs/
 point_quality/outputs/*
