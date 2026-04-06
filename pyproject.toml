@@ -1,15 +1,34 @@
 [project]
 name = "miroeval"
-version = "1.0.0"
+version = "2.0.0"
 description = "MiroEval: Benchmarking Multimodal Deep Research Agents in Process and Outcome"
 license = "Apache-2.0"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    # All deps come transitively from miroflow (factual_eval).
-    # Listed explicitly here only for packages that process_eval / point_quality
-    # need but miroflow does not pull in (currently none — miroflow covers all).
-    "miroflow",
+    # Core (used by quality + process evaluation)
+    "openai>=1.0",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.60",
 ]
 
+[project.optional-dependencies]
+# Factual evaluation requires the full MiroFlow agent framework.
+factual = ["miroflow>=1.6.0"]
+# Install everything (for development or full evaluation).
+all = ["miroeval[factual]"]
+
+[project.scripts]
+miroeval = "miroeval.cli:main"
+
 [tool.uv.sources]
+# During development, use the local miroflow package.
+# For production, remove this and install miroflow from PyPI/git.
 miroflow = { path = "factual_eval", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["miroeval"]
