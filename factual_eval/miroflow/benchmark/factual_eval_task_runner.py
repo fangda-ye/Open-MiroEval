@@ -129,9 +129,31 @@ async def run_factual_eval_task(
         try:
             async with semaphore:
                 # Compute attachment file paths (backward-compatible: None → [])
-                file_paths = task.file_path if isinstance(task.file_path, list) else (
+                raw_paths = task.file_path if isinstance(task.file_path, list) else (
                     [task.file_path] if task.file_path else []
                 )
+
+                # Resolve dict-format entries and validate file existence
+                file_paths = []
+                for fp in raw_paths:
+                    if isinstance(fp, dict):
+                        rel_path = fp.get("dir", "")
+                        if not rel_path:
+                            continue
+                        abs_path = os.path.abspath(
+                            os.path.join("data", "input_queries", rel_path)
+                        )
+                    elif isinstance(fp, str) and fp.strip():
+                        abs_path = os.path.abspath(fp)
+                    else:
+                        continue
+                    if os.path.isfile(abs_path):
+                        file_paths.append(abs_path)
+                    else:
+                        logger.warning(
+                            f"Task {task.task_id} chunk {idx}: "
+                            f"attachment not found, skipping: {abs_path}"
+                        )
 
                 for attempt in range(max_retries):
                     try:
@@ -229,6 +251,12 @@ def _worker_signal_handler(signum, frame):
 
 def _factual_eval_task_worker(task_dict, cfg_dict, max_concurrent_chunks, max_retries, chunk_timeout=None, chunk_tracing=True):
     """Worker function for ProcessPoolExecutor. Runs a single factual eval task."""
+    # Ensure CWD is factual_eval/ so relative config paths resolve correctly.
+    # ProcessPoolExecutor (forkserver) inherits the CWD from when the
+    # forkserver was started, which may be the repo root.
+    _fe_dir = str(Path(__file__).resolve().parent.parent.parent)
+    os.chdir(_fe_dir)
+
     from miroflow.agents import build_agent_from_config
     from miroflow.logging.task_tracer import set_tracer
     from miroflow.benchmark.eval_utils import Task

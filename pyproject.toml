@@ -1,0 +1,15 @@
+[project]
+name = "miroeval"
+version = "1.0.0"
+description = "MiroEval: Benchmarking Multimodal Deep Research Agents in Process and Outcome"
+license = "Apache-2.0"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    # All deps come transitively from miroflow (factual_eval).
+    # Listed explicitly here only for packages that process_eval / point_quality
+    # need but miroflow does not pull in (currently none — miroflow covers all).
+    "miroflow",
+]
+
+[tool.uv.sources]
+miroflow = { path = "factual_eval", editable = true }
