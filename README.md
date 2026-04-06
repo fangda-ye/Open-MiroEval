@@ -22,85 +22,64 @@ MiroEval is a comprehensive evaluation framework for Deep Research systems, prov
 
 ### 1. Setup
 
-All three evaluation modules share a single Python environment managed by [uv](https://docs.astral.sh/uv/) at the repo root:
-
 ```bash
-uv sync
-```
+# Install (conda recommended)
+conda create -n miroeval python=3.11
+conda activate miroeval
+pip install -e .                    # quality + process eval
+pip install -e ".[factual]"         # + factual eval (heavier deps)
 
-> If you use `run_eval.sh`, this step is done automatically on first run.
-
-Then configure your API keys:
-
-```bash
-cp .env.template .env   # edit with your own keys
+# Configure API keys
+cp .env.template .env               # edit with your keys
 ```
 
 Required keys in `.env`:
 
 | Variable | Used By |
 |----------|---------|
-| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | All modules (judge LLM) |
+| `OPENAI_API_KEY` | All modules (judge LLM) |
 | `SERPER_API_KEY` | Factual eval (web search) |
 | `JINA_API_KEY` | Factual eval (web reading) |
 
-### 2. Prepare Input
-
-Place your model's results as a JSON array file. Each entry should follow the schema:
-
-```json
-{
-  "id": 1,
-  "rewritten_query": "The evaluation query",
-  "response": "Model-generated research report",
-  "process": "Research process trace (for process eval)",
-  "files": []
-}
-```
-
-The first 70 entries (text-only, `files: []`) and last 30 entries (multimodal, with `files`) are routed automatically — text entries use the text factual-eval config, multimodal entries use the multimodal config.
-
-### 3. Run Evaluation
+### 2. Run Evaluation
 
 ```bash
-# Run all three dimensions (auto-creates venv on first run)
-bash run_eval.sh --input data/method_results/my_model.json --model_name my_model
+# Run all three dimensions (incremental — skips already-completed entries)
+python -m miroeval run --input data/method_results/my_model.json --model my_model
 
-# Run specific dimensions only
-bash run_eval.sh --input results.json --model_name test --evaluations factual_eval point_quality
+# Run only specific dimensions
+python -m miroeval run --input data/method_results/my_model.json --model my_model --eval quality process
 
-# Or call directly with the venv python
-.venv/bin/python run_eval.py --input data/method_results/my_model.json --model_name my_model
+# Retry failed entries
+python -m miroeval retry --model my_model
+
+# Check evaluation progress across all models
+python -m miroeval status
+
+# Re-aggregate results without re-evaluating
+python -m miroeval aggregate --model my_model
 ```
 
-### 4. Results
+### 3. Results
 
-Combined results are saved to `outputs/<model_name>_<timestamp>/results.json`:
+Results are saved incrementally to `outputs/<model_name>/`:
 
-```json
-{
-  "model_name": "my_model",
-  "entries_count": 100,
-  "factual_eval": {
-    "avg_right_ratio": 0.825,
-    "total_statements": 1500,
-    "right": 1200, "wrong": 150, "unknown": 100, "conflict": 50,
-    "per_entry": { ... }
-  },
-  "point_quality": {
-    "average_total_score": 8.5,
-    "dimension_averages": { "coverage_score": 8.5, "insight_score": 8.6, ... },
-    "per_entry": { ... }
-  },
-  "process_eval": {
-    "overall_avg": 8.17,
-    "intrinsic_avg": 8.1,
-    "alignment_avg": 8.23,
-    "dimensions": { ... },
-    "per_entry": { ... }
-  }
-}
 ```
+outputs/my_model/
+├── manifest.json           # Per-entry status tracking (pending/completed/failed)
+├── factual/
+│   ├── entry_1.json        # Per-entry factual verdicts
+│   └── summary.json        # Aggregated factual scores
+├── quality/
+│   ├── entry_1.json        # Per-entry quality scores
+│   └── summary.json
+├── process/
+│   ├── entry_1.json        # Per-entry process scores
+│   └── summary.json
+└── results.json            # Combined 3-dimension summary
+```
+
+The evaluation is **incremental** — if a run is interrupted, re-running the same command automatically picks up where it left off. Only pending or failed entries are evaluated.
 
 ---
 
@@ -108,33 +87,39 @@ Combined results are saved to `outputs/<model_name>_<timestamp>/results.json`:
 
 ```
 MiroEval/
-├── pyproject.toml             # Root uv project (manages .venv for all modules)
-├── .env                       # API keys (single configuration point)
-├── run_eval.py                # Unified entry point (all three dimensions)
-├── run_eval.sh                # Shell wrapper (auto-creates venv)
-├── eval/                      # Evaluation orchestration layer
-│   ├── config.py              # Path constants, env loading
-│   └── adapters/              # Per-module adapters
-├── data/                      # Shared data directory
-│   ├── input_queries/         # Evaluation query sets + multimodal attachments
-│   └── detail_results/        # Per-task per-model intermediate scores
-├── factual_eval/              # Factual evaluation (MiroFlow-based fact-checking agent)
-├── point_quality/             # Quality evaluation (adaptive point-wise scoring)
-├── process_eval/              # Process evaluation (intrinsic process quality + report alignment)
-└── task_generation/           # Evaluation task generation pipeline
+├── pyproject.toml                 # Dependencies (miroflow optional for factual)
+├── .env.template                  # Single environment config for all modules
+│
+├── miroeval/                      # Main evaluation package
+│   ├── core/                      # Shared infrastructure
+│   │   ├── llm.py                 # Unified LLM client (OpenAI/OpenRouter)
+│   │   ├── cache.py               # Thread-safe file-backed cache
+│   │   ├── config.py              # Centralized configuration
+│   │   ├── models.py              # TypedDict data models
+│   │   └── utils.py               # JSON extraction, data loading
+│   ├── factual/                   # Factual eval (wraps MiroFlow)
+│   ├── quality/                   # Report quality eval (5-stage pipeline)
+│   ├── process/                   # Process quality eval (8 dimensions)
+│   ├── runner.py                  # Incremental orchestrator with manifest tracking
+│   └── cli.py                     # CLI entry point
+│
+├── factual_eval/                  # MiroFlow agent framework (standalone SDK)
+├── task_generation/               # Evaluation task generation pipeline
+├── data/                          # Shared data directory
+│   ├── input_queries/             # Evaluation query sets + attachments
+│   └── detail_results/            # Benchmark result scores
+└── outputs/                       # Per-model evaluation outputs (auto-created)
 ```
 
 ---
 
 ## Evaluation Dimensions
 
-| Dimension | Goal | Method | Key Metric | Details |
-|-----------|------|--------|------------|---------|
-| **Factual Eval** | Report factual correctness | Agent + web search verification | Right Ratio | [factual_eval/README.md](factual_eval/README.md) |
-| **Point Quality** | Report content quality | LLM multi-dimension scoring (0-10) | Weighted Total Score | [point_quality/README.md](point_quality/README.md) |
-| **Process Eval** | Research process quality | LLM structuring + scoring (1-10) | Overall Avg (intrinsic + alignment) | [process_eval/README.md](process_eval/README.md) |
-
-For fine-grained single-dimension evaluation, see each module's README.
+| Dimension | Goal | Method | Key Metric |
+|-----------|------|--------|------------|
+| **Factual** | Report factual correctness | Agent + web search verification | Right Ratio |
+| **Quality** | Report content quality | LLM adaptive point-wise scoring (0-10) | Weighted Total Score |
+| **Process** | Research process quality | LLM structuring + 8-dimension scoring (1-10) | Overall Avg |
 
 ---
 
