@@ -1,9 +1,11 @@
 """Incremental evaluation runner with manifest-based state tracking.
 
 Key features:
-- Per-entry × per-dimension state tracking via manifest.json
+- Per-entry x per-dimension state tracking via manifest.json
+- Manifest updated after EACH entry completes (not batch-at-end)
 - Automatic resume: skips completed entries, re-runs pending/failed
 - Per-entry result persistence (one JSON per entry per dimension)
+- Failure reasons recorded in per-entry result files
 - Aggregation from per-entry results into dimension summaries
 """
 
@@ -12,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from datetime import datetime
 from statistics import mean
 from typing import Any
@@ -22,6 +25,9 @@ from miroeval.core.utils import load_entries, split_entries
 logger = logging.getLogger(__name__)
 
 ALL_DIMENSIONS = ("factual", "quality", "process")
+
+# Lock for thread-safe manifest writes (evaluators use ThreadPoolExecutor).
+_manifest_lock = threading.Lock()
 
 
 # ── Manifest management ──────────────────────────────────────────────────
@@ -48,10 +54,10 @@ def save_manifest(manifest: dict[str, Any]) -> None:
     d = _model_dir(model_name)
     os.makedirs(d, exist_ok=True)
     manifest["updated_at"] = datetime.now().isoformat()
-    # Rebuild summary counts.
     manifest["summary"] = _build_summary(manifest["entries"])
-    with open(_manifest_path(model_name), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2)
+    with _manifest_lock:
+        with open(_manifest_path(model_name), "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
 
 
 def _build_summary(entries: dict[str, dict[str, str]]) -> dict[str, Any]:
@@ -75,7 +81,6 @@ def create_manifest(
     existing = load_manifest(model_name)
 
     if existing is not None:
-        # Merge: add new entries as pending, keep existing statuses.
         for e in entries:
             eid = str(e["id"])
             if eid not in existing["entries"]:
@@ -109,6 +114,14 @@ def create_manifest(
     }
     save_manifest(manifest)
     return manifest
+
+
+def _update_entry_status(
+    manifest: dict[str, Any], entry_id: str, dim: str, status: str
+) -> None:
+    """Update a single entry's status and persist manifest immediately."""
+    manifest["entries"].setdefault(entry_id, {})[dim] = status
+    save_manifest(manifest)
 
 
 # ── Per-entry result I/O ─────────────────────────────────────────────────
@@ -202,22 +215,20 @@ def run_evaluation(
 
     Only evaluates entries/dimensions that are pending or failed.
     Completed entries are skipped automatically.
+    Manifest is updated after EACH entry completes.
     """
     dims = dimensions or set(ALL_DIMENSIONS)
 
-    # Load entries.
     entries, _meta = load_entries(input_path)
     entries_by_id = {str(e["id"]): e for e in entries}
 
-    # Create or update manifest.
     manifest = create_manifest(model_name, entries, input_path)
 
     logger.info(
-        "Model %s: %d entries, running dimensions: %s",
+        "Model %s: %d entries, dimensions: %s",
         model_name, len(entries), dims,
     )
 
-    # ── Quality evaluation ────────────────────────────────────────────
     if "quality" in dims:
         pending = get_pending_entries(manifest, "quality", force_ids=force_ids)
         if pending:
@@ -230,7 +241,6 @@ def run_evaluation(
         else:
             logger.info("Quality: all entries completed, skipping")
 
-    # ── Process evaluation ────────────────────────────────────────────
     if "process" in dims:
         pending = get_pending_entries(manifest, "process", force_ids=force_ids)
         if pending:
@@ -243,7 +253,6 @@ def run_evaluation(
         else:
             logger.info("Process: all entries completed, skipping")
 
-    # ── Factual evaluation ────────────────────────────────────────────
     if "factual" in dims:
         pending = get_pending_entries(manifest, "factual", force_ids=force_ids)
         if pending:
@@ -256,7 +265,6 @@ def run_evaluation(
         else:
             logger.info("Factual: all entries completed, skipping")
 
-    # ── Aggregate ─────────────────────────────────────────────────────
     combined = aggregate(model_name)
     return combined
 
@@ -280,19 +288,19 @@ def _run_quality(
         data_dir=str(DATA_DIR),
     )
 
+    def _on_done(eid_str: str, result: dict | None, error: str | None) -> None:
+        if result is not None:
+            save_entry_result(model_name, "quality", eid_str, result)
+            _update_entry_status(manifest, eid_str, "quality", "completed")
+        else:
+            save_entry_result(model_name, "quality", eid_str, {"error": error or "unknown"})
+            _update_entry_status(manifest, eid_str, "quality", "failed")
+
     pending_entries = [entries_by_id[eid] for eid in pending_ids if eid in entries_by_id]
-    results = evaluator.evaluate_batch(pending_entries, max_workers=max_workers)
+    results = evaluator.evaluate_batch(
+        pending_entries, max_workers=max_workers, on_entry_done=_on_done
+    )
 
-    for eid_str, result in results.get("per_entry", {}).items():
-        save_entry_result(model_name, "quality", eid_str, result)
-        manifest["entries"].setdefault(eid_str, {})["quality"] = "completed"
-
-    # Mark entries not in results as failed.
-    for eid in pending_ids:
-        if eid not in results.get("per_entry", {}):
-            manifest["entries"].setdefault(eid, {})["quality"] = "failed"
-
-    save_manifest(manifest)
     if results.get("summary"):
         save_dim_summary(model_name, "quality", results["summary"])
 
@@ -315,20 +323,21 @@ def _run_process(
         cache_dir=os.path.join(_model_dir(model_name), ".cache", "process"),
     )
 
-    pending_entries = [entries_by_id[eid] for eid in pending_ids if eid in entries_by_id]
-    results = evaluator.evaluate_batch(pending_entries, model_name, max_workers=max_workers)
-
-    for key, result in results.get("per_entry", {}).items():
-        # key is "{model_name}_{entry_id}", extract entry_id.
+    def _on_done(key: str, result: dict | None, error: str | None) -> None:
+        # key is "{model_name}_{entry_id}"
         eid_str = key.split("_", 1)[-1] if "_" in key else key
-        save_entry_result(model_name, "process", eid_str, result)
-        manifest["entries"].setdefault(eid_str, {})["process"] = "completed"
+        if result is not None:
+            save_entry_result(model_name, "process", eid_str, result)
+            _update_entry_status(manifest, eid_str, "process", "completed")
+        else:
+            save_entry_result(model_name, "process", eid_str, {"error": error or "unknown"})
+            _update_entry_status(manifest, eid_str, "process", "failed")
 
-    for eid in pending_ids:
-        if manifest["entries"].get(eid, {}).get("process") != "completed":
-            manifest["entries"].setdefault(eid, {})["process"] = "failed"
+    pending_entries = [entries_by_id[eid] for eid in pending_ids if eid in entries_by_id]
+    results = evaluator.evaluate_batch(
+        pending_entries, model_name, max_workers=max_workers, on_entry_done=_on_done
+    )
 
-    save_manifest(manifest)
     if results.get("summary"):
         save_dim_summary(model_name, "process", results["summary"])
 
@@ -363,18 +372,19 @@ def _run_factual(
         mm_res = evaluator.evaluate_batch(mm_entries, model_name, mode="multimodal")
         per_entry.update(mm_res.get("per_entry", {}))
 
+    # Update manifest per-entry (factual runs as a batch in MiroFlow,
+    # so we update after the batch completes).
     for eid_str, result in per_entry.items():
         save_entry_result(model_name, "factual", eid_str, result)
         if isinstance(result, dict) and "right" in result:
-            manifest["entries"].setdefault(eid_str, {})["factual"] = "completed"
+            _update_entry_status(manifest, eid_str, "factual", "completed")
         else:
-            manifest["entries"].setdefault(eid_str, {})["factual"] = "failed"
+            _update_entry_status(manifest, eid_str, "factual", "failed")
 
+    # Mark entries that didn't appear in results as failed.
     for eid in pending_ids:
-        if manifest["entries"].get(eid, {}).get("factual") not in ("completed",):
-            manifest["entries"].setdefault(eid, {})["factual"] = "failed"
-
-    save_manifest(manifest)
+        if eid not in per_entry:
+            _update_entry_status(manifest, eid, "factual", "failed")
 
 
 # ── Aggregation ───────────────────────────────────────────────────────────
@@ -458,11 +468,12 @@ def aggregate(model_name: str) -> dict[str, Any]:
 def _load_all_entry_results(
     model_name: str, dim: str, manifest: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
+    """Load completed entry results, skipping entries with errors."""
     results = {}
     for eid, status in manifest["entries"].items():
         if status.get(dim) == "completed":
             r = load_entry_result(model_name, dim, eid)
-            if r is not None:
+            if r is not None and "error" not in r:
                 results[eid] = r
     return results
 
@@ -483,7 +494,6 @@ def get_status(model_name: str | None = None) -> dict[str, Any] | list[dict[str,
             "updated_at": manifest.get("updated_at"),
         }
 
-    # All models: list outputs/ directories.
     results = []
     outputs = str(OUTPUTS_DIR)
     if not os.path.exists(outputs):

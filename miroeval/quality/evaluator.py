@@ -119,50 +119,65 @@ class QualityEvaluator:
         entries: list[dict[str, Any]],
         *,
         max_workers: int = 10,
+        on_entry_done: Any = None,
     ) -> dict[str, Any]:
         """Evaluate a batch of entries in parallel.
 
         Each entry dict must have: id, rewritten_query (or query), response.
         Optional: files (list of FileAttachment dicts).
 
+        Args:
+            on_entry_done: Optional callback ``(entry_id: str, result: dict | None, error: str | None) -> None``
+                called after each entry completes (success or failure).
+
         Returns {per_entry: {...}, summary: {...}}.
         """
+        from tqdm import tqdm
+
         results: dict[str, Any] = {}
         failed = 0
 
-        def _run_one(entry: dict[str, Any]) -> tuple[int, dict[str, Any] | None]:
+        def _run_one(entry: dict[str, Any]) -> tuple[int, dict[str, Any] | None, str | None]:
             eid = entry["id"]
             query = entry.get("rewritten_query") or entry.get("query", "")
             report = entry.get("response", "")
             if not report:
-                return eid, None
+                return eid, None, "no response"
 
-            # Resolve attachments.
             att_parts = self._resolve_files(entry.get("files", []))
 
             try:
-                return eid, self.evaluate_entry(
+                result = self.evaluate_entry(
                     eid, query, report, attachment_parts=att_parts or None
                 )
+                return eid, result, None
             except Exception as e:
                 logger.error("Quality eval failed for entry %s: %s", eid, e)
-                return eid, None
+                return eid, None, str(e)
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {pool.submit(_run_one, e): e["id"] for e in entries}
-            for fut in as_completed(futures):
-                eid, result = fut.result()
-                if result is not None:
-                    results[str(eid)] = result
-                else:
-                    failed += 1
+            with tqdm(total=len(futures), desc="Quality", unit="entry") as pbar:
+                for fut in as_completed(futures):
+                    eid, result, error = fut.result()
+                    eid_str = str(eid)
+                    if result is not None:
+                        results[eid_str] = result
+                    else:
+                        failed += 1
+                        results[eid_str] = {"error": error or "unknown"}
+                    if on_entry_done:
+                        on_entry_done(eid_str, result, error)
+                    pbar.set_postfix(ok=len(results) - failed, fail=failed)
+                    pbar.update(1)
 
-        logger.info("Quality eval: %d completed, %d failed", len(results), failed)
+        logger.info("Quality eval: %d completed, %d failed", len(results) - failed, failed)
 
-        # Summary.
-        scores = [r["total_weighted_score"] for r in results.values() if r["total_weighted_score"] > 0]
+        # Summary (exclude failed entries).
+        ok_results = {k: v for k, v in results.items() if "error" not in v}
+        scores = [r["total_weighted_score"] for r in ok_results.values() if r.get("total_weighted_score", 0) > 0]
         dim_scores: dict[str, list[float]] = {}
-        for r in results.values():
+        for r in ok_results.values():
             for k, v in r.get("dimension_scores", {}).items():
                 if v is not None:
                     dim_scores.setdefault(k, []).append(v)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from typing import Any
 
@@ -28,15 +29,38 @@ from miroeval.core.config import (
     QUALITY_MODEL,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger("miroeval")
+
+
+def _setup_logging(model_name: str | None = None) -> None:
+    """Configure logging to stderr + file (if model_name given)."""
+    from miroeval.core.config import OUTPUTS_DIR
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    # stderr handler (always).
+    if not root.handlers:
+        sh = logging.StreamHandler()
+        sh.setFormatter(fmt)
+        root.addHandler(sh)
+
+    # File handler (per-model eval log).
+    if model_name:
+        log_dir = os.path.join(str(OUTPUTS_DIR), model_name)
+        os.makedirs(log_dir, exist_ok=True)
+        fh = logging.FileHandler(
+            os.path.join(log_dir, "eval.log"), encoding="utf-8"
+        )
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
 
 
 def cmd_run(args: argparse.Namespace) -> None:
     """Run incremental evaluation."""
+    _setup_logging(args.model)
     from miroeval.runner import run_evaluation
 
     dims = set(args.eval) if args.eval else None
@@ -62,6 +86,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 def cmd_retry(args: argparse.Namespace) -> None:
     """Retry failed entries."""
+    _setup_logging(args.model)
     from miroeval.runner import load_manifest, run_evaluation
 
     manifest = load_manifest(args.model)
@@ -103,6 +128,7 @@ def cmd_retry(args: argparse.Namespace) -> None:
 
 def cmd_status(args: argparse.Namespace) -> None:
     """Show evaluation status."""
+    _setup_logging()
     from miroeval.runner import get_status
 
     if args.model:

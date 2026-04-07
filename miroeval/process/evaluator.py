@@ -97,40 +97,53 @@ class ProcessEvaluator:
         model_name: str,
         *,
         max_workers: int = 10,
+        on_entry_done: Any = None,
     ) -> dict[str, Any]:
         """Evaluate a batch of entries in parallel.
 
         Each entry dict must have: id, rewritten_query (or query), response, process.
 
+        Args:
+            on_entry_done: Optional callback ``(key: str, result: dict | None, error: str | None) -> None``
+                called after each entry completes.
+
         Returns {per_entry: {...}, summary: {...}}.
         """
+        from tqdm import tqdm
+
         results: dict[str, Any] = {}
         failed = 0
 
-        def _run(e: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
+        def _run(e: dict[str, Any]) -> tuple[str, dict[str, Any] | None, str | None]:
             eid = e["id"]
             key = f"{model_name}_{eid}"
             query = e.get("rewritten_query") or e.get("query", "")
             process = e.get("process", "")
             report = e.get("response", "")
             if not process:
-                return key, None
+                return key, None, "no process trace"
             try:
-                return key, self.evaluate_entry(eid, model_name, query, process, report)
+                return key, self.evaluate_entry(eid, model_name, query, process, report), None
             except Exception as exc:
                 logger.error("Process eval failed for %s: %s", key, exc)
-                return key, None
+                return key, None, str(exc)
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futs = {pool.submit(_run, e): e["id"] for e in entries}
-            for fut in as_completed(futs):
-                key, result = fut.result()
-                if result is not None:
-                    results[key] = result
-                else:
-                    failed += 1
+            with tqdm(total=len(futs), desc="Process", unit="entry") as pbar:
+                for fut in as_completed(futs):
+                    key, result, error = fut.result()
+                    if result is not None:
+                        results[key] = result
+                    else:
+                        failed += 1
+                        results[key] = {"error": error or "unknown"}
+                    if on_entry_done:
+                        on_entry_done(key, result, error)
+                    pbar.set_postfix(ok=len(results) - failed, fail=failed)
+                    pbar.update(1)
 
-        logger.info("Process eval: %d completed, %d failed", len(results), failed)
+        logger.info("Process eval: %d completed, %d failed", len(results) - failed, failed)
         summary = self._aggregate(results, model_name)
         return {"per_entry": results, "summary": summary}
 
@@ -328,6 +341,8 @@ class ProcessEvaluator:
         dim_scores: dict[str, list[float]] = {}
 
         for result in results.values():
+            if "error" in result:
+                continue  # skip failed entries
             for scores_key, dims in [
                 ("intrinsic_scores", INTRINSIC_DIMS),
                 ("alignment_scores", ALIGNMENT_DIMS),
