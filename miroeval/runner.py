@@ -183,14 +183,18 @@ def get_pending_entries(
     *,
     force_ids: set[str] | None = None,
 ) -> list[str]:
-    """Get entry IDs that need evaluation for a given dimension."""
-    pending = []
-    for eid, status in manifest["entries"].items():
-        if force_ids and eid in force_ids:
-            pending.append(eid)
-        elif status.get(dim) in ("pending", "failed"):
-            pending.append(eid)
-    return pending
+    """Get entry IDs that need evaluation for a given dimension.
+
+    If *force_ids* is given, ONLY those IDs are returned (regardless of status).
+    Otherwise, returns all pending/failed entries.
+    """
+    if force_ids:
+        return [eid for eid in force_ids if eid in manifest["entries"]]
+
+    return [
+        eid for eid, status in manifest["entries"].items()
+        if status.get(dim) in ("pending", "failed")
+    ]
 
 
 def run_evaluation(
