@@ -115,31 +115,30 @@ class ProcessEvaluator:
         failed = 0
 
         def _run(e: dict[str, Any]) -> tuple[str, dict[str, Any] | None, str | None]:
-            eid = e["id"]
-            key = f"{model_name}_{eid}"
+            eid = str(e["id"])
             query = e.get("rewritten_query") or e.get("query", "")
             process = e.get("process", "")
             report = e.get("response", "")
             if not process:
-                return key, None, "no process trace"
+                return eid, None, "no process trace"
             try:
-                return key, self.evaluate_entry(eid, model_name, query, process, report), None
+                return eid, self.evaluate_entry(e["id"], model_name, query, process, report), None
             except Exception as exc:
-                logger.error("Process eval failed for %s: %s", key, exc)
-                return key, None, str(exc)
+                logger.error("Process eval failed for entry %s: %s", eid, exc)
+                return eid, None, str(exc)
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futs = {pool.submit(_run, e): e["id"] for e in entries}
             with tqdm(total=len(futs), desc="Process", unit="entry") as pbar:
                 for fut in as_completed(futs):
-                    key, result, error = fut.result()
+                    eid, result, error = fut.result()
                     if result is not None:
-                        results[key] = result
+                        results[eid] = result
                     else:
                         failed += 1
-                        results[key] = {"error": error or "unknown"}
+                        results[eid] = {"error": error or "unknown"}
                     if on_entry_done:
-                        on_entry_done(key, result, error)
+                        on_entry_done(eid, result, error)
                     pbar.set_postfix(ok=len(results) - failed, fail=failed)
                     pbar.update(1)
 

@@ -327,9 +327,7 @@ def _run_process(
         cache_dir=os.path.join(_model_dir(model_name), ".cache", "process"),
     )
 
-    def _on_done(key: str, result: dict | None, error: str | None) -> None:
-        # key is "{model_name}_{entry_id}"
-        eid_str = key.split("_", 1)[-1] if "_" in key else key
+    def _on_done(eid_str: str, result: dict | None, error: str | None) -> None:
         if result is not None:
             save_entry_result(model_name, "process", eid_str, result)
             _update_entry_status(manifest, eid_str, "process", "completed")
