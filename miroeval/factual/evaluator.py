@@ -151,6 +151,10 @@ class FactualEvaluator:
 
         self._ensure_hydra()
 
+        # Tell MiroFlow worker processes where to chdir so relative
+        # config paths (config/llm/*, config/tool/*) resolve correctly.
+        os.environ["MIROEVAL_FACTUAL_CWD"] = str(FACTUAL_CONFIG_DIR.parent)
+
         from omegaconf import OmegaConf
 
         cfg_template = self._cfg_multimodal if mode == "multimodal" else self._cfg_text

@@ -251,10 +251,14 @@ def _worker_signal_handler(signum, frame):
 
 def _factual_eval_task_worker(task_dict, cfg_dict, max_concurrent_chunks, max_retries, chunk_timeout=None, chunk_tracing=True):
     """Worker function for ProcessPoolExecutor. Runs a single factual eval task."""
-    # Ensure CWD is factual_eval/ so relative config paths resolve correctly.
-    # ProcessPoolExecutor (forkserver) inherits the CWD from when the
-    # forkserver was started, which may be the repo root.
-    _fe_dir = str(Path(__file__).resolve().parent.parent.parent)
+    # Ensure CWD points to the directory containing config/ so relative
+    # config paths (e.g. config/llm/base_gpt5_mini.yaml) resolve correctly.
+    # MIROEVAL_FACTUAL_CWD is set by the evaluator; fall back to the
+    # miroflow package root for standalone usage.
+    _fe_dir = os.environ.get(
+        "MIROEVAL_FACTUAL_CWD",
+        str(Path(__file__).resolve().parent.parent.parent),
+    )
     os.chdir(_fe_dir)
 
     from miroflow.agents import build_agent_from_config
